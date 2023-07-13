@@ -1,0 +1,238 @@
+﻿CMAKE_MINIMUM_REQUIRED(VERSION 3.16.0)
+
+SET(PROJECT_NAME RPLM.CAE.LogosInteraction)
+
+SET(CMAKE_CXX_STANDARD 17)
+
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+file(GLOB_RECURSE HEADER_FILES Include/*.h)
+file(GLOB_RECURSE SOURCE_FILES Source/*.cpp Source/*.h)
+file(GLOB_RECURSE RESOURCE_FILES Resources/*.resx)
+file(GLOB_RECURSE ICONS_FILES Resources/images/*.svg *.png)
+
+
+list(APPEND SOURCE_FILES
+	${CMAKE_CURRENT_SOURCE_DIR}/Precompiled.h
+	${CMAKE_CURRENT_SOURCE_DIR}/Precompiled.cpp)
+
+if(RPLM_FOLDER_GROUP)
+	GENERATE_FOLDER_SG("${HEADER_FILES}" ${CMAKE_CURRENT_SOURCE_DIR}/Include Include/)
+	GENERATE_FOLDER_SG("${SOURCE_FILES}" ${CMAKE_CURRENT_SOURCE_DIR}/Source Source/)
+	GENERATE_FOLDER_SG("${PRECOMPILED_FILES}" ${CMAKE_CURRENT_SOURCE_DIR} Source/)
+	GENERATE_FOLDER_SG("${ICONS_FILES}" ${CMAKE_CURRENT_SOURCE_DIR}/Resources/images/Icons Icons/)
+
+    if(MSVC)
+        set_source_files_properties(${RESOURCE_FILES} PROPERTIES LANGUAGE TXT)
+    endif()
+endif()
+
+find_package(Qt5Core QUIET)
+find_package(Qt5Gui QUIET)
+find_package(Qt5Widgets QUIET)
+
+
+set(CMAKE_AUTOMOC ON)
+
+set(RPLM_BUILD_PDB ON)
+add_library(${PROJECT_NAME} SHARED ${HEADER_FILES} ${SOURCE_FILES} ${PRECOMPILED_FILES} ${RESOURCE_FILES} ${ICONS_FILES})
+
+target_compile_definitions(${PROJECT_NAME}
+	PRIVATE
+		RGP_CAE_LOGOS_ANALYSIS_EXPORTS
+#		_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
+)
+# По правильному нужно сначала проверить прилетевшую из вызывающего cmakelist переменную (полезно для локальной сборки целого проекта с назначенной конфигурацией)
+# Когда-то нужно будет сделать ее кэшированной (если сборка будет происходить не с помощью скриптов)
+if (DEFINED ENV{RPLM_CI_BUILD_PURPOSE})
+    if ($ENV{RPLM_CI_BUILD_PURPOSE} STREQUAL PROD)
+        message ("RPLM_CI_BUILD_PURPOSE = PROD")
+        target_compile_definitions(${PROJECT_NAME}
+            PRIVATE
+                RPLM_CI_BUILD_PURPOSE_PROD
+        )
+    else()
+       message ("RPLM_CI_BUILD_PURPOSE = WORK")
+       target_compile_definitions(${PROJECT_NAME}
+	        PRIVATE
+	            RPLM_CI_BUILD_PURPOSE_WORK
+       )
+    endif()
+else()
+    message ("RPLM_CI_BUILD_PURPOSE = WORK")
+    target_compile_definitions(${PROJECT_NAME}
+	    PRIVATE
+	        RPLM_CI_BUILD_PURPOSE_WORK
+    )
+endif()
+
+if(MSVC)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4996")
+	set_target_properties(Qt5::Core PROPERTIES MAP_IMPORTED_CONFIG_RELWITHDEBINFO "Debug")
+	set_target_properties(Qt5::Widgets PROPERTIES MAP_IMPORTED_CONFIG_RELWITHDEBINFO "Debug")
+	set_target_properties(Qt5::Gui PROPERTIES MAP_IMPORTED_CONFIG_RELWITHDEBINFO "Debug")
+	set_target_properties(Qt5::WinMain PROPERTIES MAP_IMPORTED_CONFIG_RELWITHDEBINFO "Debug")
+endif()
+
+message(STATUS "------------------" ${RPLM_INCLUDE_DIR})
+
+find_package(RPLM
+    COMPONENTS
+	Kernel3D
+	Geometry2D
+	EPCommon
+	EPModel
+	EPMesh
+	ShellUI
+	EPUI
+	OS
+	EPGraphics
+	EPWidgets
+	UIWidgets
+	BaseFramework
+	CAEMesh
+	CAETools
+	CAEModel
+	CAEAnalysis
+	CAEAnalysisUI
+	CAEMesher
+	CAEMesherUI
+	CAEProcessor
+	CAEProblem
+	#CAECore
+	CAEClient
+    #Solver
+    #CAD
+    CADModel
+    CADUI
+)
+
+if(UNIX)
+	SET(OS_LIB_EXTENSION "so")
+	SET(OS_STATIC_LIB "a")
+	SET(EFR_LIB "${CMAKE_CURRENT_SOURCE_DIR}/External/EFR/bin/Linux/libEFR3-RPLM.so")
+	SET(LIB_NAME "lib/lib")
+	SET(BIN_LIB "bin/lib")
+else()
+    SET(OS_LIB_EXTENSION "d.lib")
+	SET(OS_STATIC_LIB "d.lib")
+	SET(EFR_LIB "${CMAKE_CURRENT_SOURCE_DIR}/External/EFR/lib/Windows/EFR3.dll.lib")
+	SET(LIB_NAME "lib/")
+	SET(BIN_LIB "lib/")
+endif()
+
+message(STATUS "Lib -------- " ${OS_LIB_EXTENSION})
+message(STATUS "Static -------- " ${OS_STATIC_LIB})
+message(STATUS "EFR -------- " ${EFR_LIB})
+message(STATUS "Mesher -------- " ${RPLM_INCLUDE_DIR}/../${BIN_LIB}RPLM.CAE.Mesher.${OS_LIB_EXTENSION})
+message(STATUS "Tools -------- " ${RPLM_INCLUDE_DIR}/../${LIB_NAME}CAE.Tools.${OS_STATIC_LIB})
+
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE
+    	${Poco_LIBRARIES}
+	    ${CMAKE_DL_LIBS}
+		RPLM::Kernel3D
+		RPLM::Geometry2D
+		RPLM::EPCommon
+		RPLM::EPModel
+		RPLM::EPMesh
+		RPLM::EPUI
+		RPLM::ShellUI
+		RPLM::BaseFramework
+		RPLM::OS
+		RPLM::CAEMesh
+		RPLM::CAETools
+		RPLM::CAEModel
+		RPLM::CAEAnalysis
+		RPLM::CAEAnalysisUI
+		RPLM::CAEMesher
+		RPLM::CAEMesherUI
+		RPLM::CAEProcessor
+		RPLM::CAEProblem
+		#RPLM::CAECore
+		RPLM::CAEClient
+		RPLM::CADModel
+		RPLM::CADUI
+		${EFR_LIB}
+
+	    Qt5::Core
+	    Qt5::Widgets
+		Qt5::Gui
+        RPLM.CAE.Model.Serialize
+    	#${CMAKE_CURRENT_SOURCE_DIR}/External/EFR/lib/EFR3.dll.lib
+	    #${CMAKE_CURRENT_SOURCE_DIR}/External/EFR/lib/z_MD.lib
+)
+
+
+if(UNIX)
+    SET(EFR_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/External/EFR/include/Linux")
+else()
+    SET(EFR_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/External/EFR/include/Windows")
+endif()
+
+target_include_directories(${PROJECT_NAME}
+	PUBLIC
+		Include
+		${Poco_INCLUDE_DIRS}
+		${RPLM_INCLUDE_DIR}
+		${RPLM_INCLUDE_DIR}/FPlatform
+		${RPLM_INCLUDE_DIR}/RPLM.Math.Kernel3D
+		${RPLM_INCLUDE_DIR}/RPLM.Math.Geometry2D
+
+		${RPLM_INCLUDE_DIR}/RPLM.Utils.OS
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Common
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Graphics
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Mesh
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Mesh/Interface
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Model
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Model/Model
+		${RPLM_INCLUDE_DIR}/RPLM.Shell.UI
+		${RPLM_INCLUDE_DIR}/RPLM.EP.UI
+		${RPLM_INCLUDE_DIR}/RPLM.EP.Widgets
+		${RPLM_INCLUDE_DIR}/RPLM.UI.Widgets
+		${RPLM_INCLUDE_DIR}/RPLM.Base.Framework
+        ${RPLM_INCLUDE_DIR}/RPLM.CAD.UI
+        ${RPLM_INCLUDE_DIR}/RPLM.CAD.Model
+		${RPLM_INCLUDE_DIR}/RPLM.CAE.Analysis
+		${RPLM_INCLUDE_DIR}/RPLM.CAE.AnalysisUI
+		${RPLM_INCLUDE_DIR}/RPLM.CAE.Mesher
+		#${CMAKE_CURRENT_SOURCE_DIR}/../RPLM.CAE.MesherUI/Include
+		${RPLM_INCLUDE_DIR}/RPLM.CAE.Processor
+		#${CMAKE_CURRENT_SOURCE_DIR}/../RPLM.CAE.Solver/Include
+		${RPLM_INCLUDE_DIR}/CAE.Tools
+		${RPLM_INCLUDE_DIR}/CAE.Problem
+		${RPLM_INCLUDE_DIR}/CAE.Model
+		${RPLM_INCLUDE_DIR}/CAE.Messages
+		${RPLM_INCLUDE_DIR}/CAE.Mesh
+		#${RPLM_INCLUDE_DIR}/CAE.Core
+		${RPLM_INCLUDE_DIR}/CAE.Client
+        ${RPLM_INCLUDE_DIR}/RPLM.CAE.Mesher.UI
+        ${EFR_INCLUDE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../RPLM.CAE.Model.Serialize/Include
+
+)
+
+
+
+
+IF (USE_PCH)
+	ADD_PRECOMPILED_HEADER(${PROJECT_NAME} Precompiled.h FORCEINCLUDE)
+ENDIF()
+
+#IF (MSVC)
+#	SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "/Zm200")
+#ENDIF()
+
+if(UNIX)
+    INSTALL(DIRECTORY External/Solver/Linux/ DESTINATION ${APP_INSTALL_BIN}/Solver)
+    INSTALL(DIRECTORY External/OpenMPI/Linux/openmpi DESTINATION ${APP_INSTALL_BIN})
+    INSTALL(DIRECTORY External/EFR/bin/Linux/ DESTINATION ${APP_INSTALL_BIN})
+else()
+    INSTALL(DIRECTORY External/Solver/Windows/Structural/ DESTINATION ${APP_INSTALL_BIN}/Solver)
+    INSTALL(DIRECTORY External/Solver/Windows/Heat/ DESTINATION ${APP_INSTALL_BIN}/Solver)
+    INSTALL(DIRECTORY External/EFR/bin/Windows/ DESTINATION ${APP_INSTALL_BIN})
+endif()
+
+## COPY RESOURCES
+ADD_COPY_DEV_RESOURCES_COMMANDS(${PROJECT_NAME})
+## INSTALL
+RPLM_INSTALL_CORE(TARGET ${PROJECT_NAME} POSTFIX_INCLUDE ${PROJECT_NAME})
